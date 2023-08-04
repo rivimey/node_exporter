@@ -1,0 +1,55 @@
+---
+
+- name: Create the node-exporter group
+  group:
+    name: "{{ node_exporter_group }}"
+    state: present
+
+- name: Create the node-exporter user
+  user:
+    name: "{{ node_exporter_user }}"
+    state: present
+
+- include: github-node-exporter-release.yml
+  when: not node_exporter_release_url
+
+- name: Make sure the node-exporter install directory exists
+  file:
+    dest: "{{ node_exporter_install_path }}"
+    state: directory
+    owner: "root"
+    group: "root"
+    mode: 0755
+    recurse: true
+
+- name: Get the name of the node-exporter release archive
+  set_fact:
+    _node_exporter_archive: "{{ node_exporter_release_url | basename }}"
+
+- name: Set the node-exporter installation path
+  set_fact:
+    _node_exporter_install_path: "{{ node_exporter_install_path }}/{{ _node_exporter_archive | regex_replace('\\.zip|\\.gz|\\.tar|\\.tgz|\\.bzip','') }}"
+
+- name: Download the node-exporter
+  unarchive:
+    src: "{{ node_exporter_release_url }}"
+    dest: "{{ node_exporter_install_path }}"
+    creates: "{{ _node_exporter_install_path }}/node_exporter"
+    remote_src: yes
+
+- name: Create node-exporter bin directory
+  ansible.builtin.file:
+    path: "{{ node_exporter_bin_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Symlink the node-exporter binaries
+  file:
+    src: "{{ _node_exporter_install_path }}/{{ item }}"
+    dest: "{{ node_exporter_bin_path }}/{{ item }}"
+    state: link
+  notify: restart node_exporter
+  with_items:
+    - node_exporter
